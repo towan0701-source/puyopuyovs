@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Puyo Battle</title>
+    <style>
+        /* Reset & Base */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #0f172a;
+            color: white;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        canvas { image-rendering: pixelated; display: block; }
+        .hidden { display: none !important; }
+
+        /* Lobby Screen */
+        #lobbyScreen {
+            position: absolute; inset: 0; background-color: #0f172a; z-index: 50;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 1.5rem; text-align: center; padding: 1rem;
+        }
+        .title-text { font-size: 2.5rem; font-weight: 900; background: linear-gradient(to right, #3b82f6, #a855f7); -webkit-background-clip: text; color: transparent; }
+        .btn-primary {
+            background: linear-gradient(to bottom, #3b82f6, #1d4ed8);
+            color: white; padding: 1rem 2rem; border-radius: 9999px; border: none;
+            font-size: 1.25rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); transition: transform 0.1s;
+        }
+        .btn-primary:active { transform: scale(0.95); }
+        #statusText { color: #94a3b8; font-size: 0.9rem; }
+
+        /* Battle Layout */
+        #battleScreen {
+            width: 100%; max-width: 32rem; height: 100vh; height: 100dvh;
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+            padding: 0.5rem; gap: 0.5rem;
+            position: relative;
+        }
+
+        /* Enemy Area (Top Right) */
+        .enemy-area {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            display: flex; align-items: flex-end; gap: 0.5rem; padding: 0.5rem;
+            background-color: rgba(30,41,59,0.8); border-radius: 0.75rem; border: 1px solid #334155;
+            transform-origin: top right;
+            transform: scale(0.65);
+            z-index: 20;
+            backdrop-filter: blur(4px);
+        }
+        .info-col { display: flex; flex-direction: column; gap: 0.5rem; }
+        .label { font-size: 0.75rem; font-weight: bold; color: #94a3b8; letter-spacing: 0.05em; }
+        .ojama-box { background: rgba(239,68,68,0.2); border: 1px solid #ef4444; border-radius: 0.5rem; padding: 0.25rem 0.5rem; color: #fca5a5; font-weight: bold; }
+        #enemyCanvas { background-color: #000; border-radius: 0.25rem; box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.5); }
+
+        /* Player Area (Middle) */
+        .player-area {
+            position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+            margin-bottom: auto;
+            margin-top: 1rem;
+        }
+        .player-header { width: 180px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0; }
+        .score-val { font-size: 1.25rem; font-family: monospace; font-weight: bold; color: #22d3ee; line-height: 1; }
+        .next-box { background-color: rgba(0,0,0,0.5); border-radius: 0.5rem; padding: 0.25rem; border: 1px solid rgba(51,65,85,0.5); }
+        .canvas-wrapper { position: relative; background-color: #1e293b; padding: 0.5rem; border-radius: 0.75rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); border: 1px solid #334155; }
+        #gameCanvas { background-color: #000; border-radius: 0.5rem; }
+
+        /* Overlays */
+        .overlay-screen { position: absolute; inset: 0; background-color: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 0.5rem; z-index: 10; backdrop-filter: blur(4px); }
+        .result-title { font-size: 2rem; font-weight: 900; text-align: center; margin-bottom: 1rem; filter: drop-shadow(0 4px 3px rgba(0,0,0,0.5)); }
+        .win-text { color: #fde047; background: linear-gradient(to right, #fde047, #f59e0b); -webkit-background-clip: text; color: transparent; }
+        .lose-text { color: #ef4444; background: linear-gradient(to right, #ef4444, #991b1b); -webkit-background-clip: text; color: transparent; }
+        #chainDisplay { position: absolute; top: 30%; left: 0; width: 100%; text-align: center; font-size: 1.5rem; font-weight: 900; color: #fde047; filter: drop-shadow(0 0 8px rgba(255,255,0,0.8)); opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; z-index: 5; }
+
+        /* Controls */
+        .controls-wrapper { width: 100%; max-width: 340px; background-color: rgba(30,41,59,0.9); padding: 0.5rem; border-radius: 1rem; border: 1px solid rgba(51,65,85,0.8); margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.25rem; width: 7rem; height: 7rem; }
+        .btn-dpad { background-color: #334155; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-size: 1.125rem; border: 1px solid rgba(71,85,105,0.5); color: white; cursor: pointer; transition: all 0.1s; }
+        .btn-dpad:active { background-color: #0891b2; transform: scale(0.95); }
+        .d-pad-center { background-color: rgba(30,41,59,0.5); border-radius: 0.25rem; }
+        .action-group { display: flex; gap: 0.5rem; align-items: center; padding-right: 0.5rem; }
+        .action-col { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+        .action-col.offset { transform: translateY(-0.75rem); }
+        .btn-action { width: 3.25rem; height: 3.25rem; border-radius: 9999px; background-color: #334155; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: bold; border: 1px solid #475569; color: white; cursor: pointer; transition: all 0.1s; }
+        .btn-action:active { background-color: #0891b2; transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <!-- ロビー画面 -->
+    <div id="lobbyScreen">
+        <h1 class="title-text">PUYO P2P BATTLE</h1>
+        <p>連鎖して相手におじゃまぷよを送ろう！</p>
+        
+        <div id="lobbyMainUI" style="display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 300px;">
+            <button id="createRoomBtn" class="btn-primary">部屋を作って対戦</button>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid #334155; padding-top: 1rem; margin-top: 0.5rem;">
+                <p style="font-size: 0.9rem; color: #94a3b8;">5桁のルームIDを入力して参加</p>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="joinRoomIdInput" placeholder="12345" maxlength="5" style="padding: 0.5rem; border-radius: 0.5rem; color: black; border: 1px solid #ccc; width: 100%; text-align: center; font-size: 1.25rem; font-weight: bold; letter-spacing: 0.1em;" />
+                    <button id="joinRoomBtn" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 1rem; white-space: nowrap;">参加</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="inviteArea" class="hidden" style="display: flex; flex-direction: column; gap: 0.5rem; width: 100%; max-width: 300px;">
+            <p style="color: #94a3b8; font-size: 0.85rem;">あなたのルームID</p>
+            <div id="displayRoomId" style="font-size: 2.25rem; font-weight: 900; letter-spacing: 0.15em; color: #38bdf8; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 0.5rem; border: 1px solid #0284c7;">-----</div>
+            <p style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;">または以下のURLをコピーして送る</p>
+            <input type="text" id="inviteUrl" readonly style="padding: 0.5rem; border-radius: 0.25rem; color: black; border: 1px solid #ccc; width: 100%; font-size: 0.8rem;" />
+            <button id="copyUrlBtn" class="btn-primary" style="padding: 0.5rem; font-size: 0.9rem;">URLをコピー</button>
+        </div>
+
+        <p id="statusText"></p>
+    </div>
+
+    <!-- バトル画面 -->
+    <div id="battleScreen" class="hidden">
+        
+        <!-- 相手エリア -->
+        <div class="enemy-area">
+            <div class="info-col">
+                <span class="label">ENEMY</span>
+                <div class="ojama-box">予告: <span id="enemyOjamaDisplay">0</span></div>
+            </div>
+            <canvas id="enemyCanvas" width="120" height="260"></canvas>
+        </div>
+
+        <!-- プレイヤーエリア -->
+        <div class="player-area">
+            <div class="player-header">
+                <div class="info-col">
+                    <span class="label">SCORE</span>
+                    <span id="scoreDisplay" class="score-val">0</span>
+                    <div class="ojama-box" style="margin-top:0.25rem;">予告: <span id="myOjamaDisplay">0</span></div>
+                </div>
+                <div class="info-col" style="align-items: flex-end;">
+                    <span class="label">NEXT</span>
+                    <div class="next-box"><canvas id="nextCanvas" width="48" height="60"></canvas></div>
+                </div>
+            </div>
+            
+            <div class="canvas-wrapper">
+                <canvas id="gameCanvas" width="180" height="390"></canvas>
+                <div id="chainDisplay">1 CHAIN!</div>
+                
+                <!-- リザルトオーバーレイ -->
+                <div id="resultScreen" class="overlay-screen hidden">
+                    <h2 id="resultTitle" class="result-title"></h2>
+                    <button id="returnLobbyBtn" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 1rem;">ロビーに戻る</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- コントロール -->
+        <div class="controls-wrapper">
+            <div class="d-pad">
+                <div></div><div></div><div></div>
+                <button id="btnLeft" class="btn-dpad">◀</button>
+                <div class="d-pad-center"></div>
+                <button id="btnRight" class="btn-dpad">▶</button>
+                <div></div>
+                <button id="btnDown" class="btn-dpad">▼</button>
+                <div></div>
+            </div>
+            <div class="action-group">
+                <div class="action-col"><button id="btnLeftRot" class="btn-action">↺</button></div>
+                <div class="action-col offset"><button id="btnRightRot" class="btn-action">↻</button></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <script>
+        // WebRTC Config (PeerJS)
+        let peer = null;
+        let dataConnection = null;
+        let isHost = false;
+
+        // UI Elements
+        const lobbyScreen = document.getElementById('lobbyScreen');
+        const battleScreen = document.getElementById('battleScreen');
+        const statusText = document.getElementById('statusText');
+        const lobbyMainUI = document.getElementById('lobbyMainUI');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const joinRoomIdInput = document.getElementById('joinRoomIdInput');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
+        const inviteArea = document.getElementById('inviteArea');
+        const displayRoomId = document.getElementById('displayRoomId');
+        const inviteUrlInput = document.getElementById('inviteUrl');
+        const copyUrlBtn = document.getElementById('copyUrlBtn');
+        const returnLobbyBtn = document.getElementById('returnLobbyBtn');
+        const resultScreen = document.getElementById('resultScreen');
+        const resultTitle = document.getElementById('resultTitle');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomIdFromUrl = urlParams.get('room');
+
+            if (roomIdFromUrl) {
+                // URLに部屋IDが含まれている場合（ゲスト参加）
+                lobbyMainUI.classList.add('hidden');
+                statusText.innerText = "ホストに接続しています...";
+                joinRoom(roomIdFromUrl);
+            } else {
+                // 通常アクセス（ホストとして部屋作成）
+                createRoomBtn.addEventListener('click', () => {
+                    lobbyMainUI.classList.add('hidden');
+                    statusText.innerText = "部屋を作成中...";
+                    createRoom();
+                });
+
+                // 手動でルームIDを入力して参加
+                joinRoomBtn.addEventListener('click', () => {
+                    const roomId = joinRoomIdInput.value.trim();
+                    if (!roomId || roomId.length !== 5 || isNaN(roomId)) {
+                        statusText.innerText = "5桁の数字を入力してください";
+                        return;
+                    }
+                    lobbyMainUI.classList.add('hidden');
+                    statusText.innerText = "ホストに接続しています...";
+                    joinRoom(roomId);
+                });
+            }
+        });
+
+        function createRoom() {
+            isHost = true;
+            // 5桁のランダムな数字IDを生成
+            const roomId = Math.floor(10000 + Math.random() * 90000).toString();
+            peer = new Peer(roomId); 
+
+            peer.on('open', (id) => {
+                // ルームIDと招待URLを表示
+                displayRoomId.innerText = id;
+                const inviteLink = window.location.origin + window.location.pathname + '?room=' + id;
+                inviteUrlInput.value = inviteLink;
+                
+                inviteArea.classList.remove('hidden');
+
+                copyUrlBtn.onclick = () => {
+                    inviteUrlInput.select();
+                    document.execCommand('copy');
+                    copyUrlBtn.innerText = "コピーしました！";
+                    setTimeout(() => copyUrlBtn.innerText = "URLをコピー", 2000);
+                };
+
+                statusText.innerText = "対戦相手の参加を待っています...";
+            });
+
+            peer.on('connection', (conn) => {
+                // ゲストからの接続を受け入れた時
+                dataConnection = conn;
+                setupDataConnection();
+            });
+            
+            peer.on('error', (err) => {
+                // もしIDが他者と衝突した場合は自動で再試行
+                if (err.type === 'unavailable-id') {
+                    peer.destroy();
+                    createRoom();
+                    return;
+                }
+                statusText.innerText = "エラーが発生しました: " + err.type;
+                console.error(err);
+                lobbyMainUI.classList.remove('hidden');
+                inviteArea.classList.add('hidden');
+            });
+        }
+
+        function joinRoom(hostId) {
+            isHost = false;
+            peer = new Peer();
+
+            peer.on('open', () => {
+                dataConnection = peer.connect(hostId, { reliable: true });
+                setupDataConnection();
+            });
+
+            peer.on('error', (err) => {
+                statusText.innerText = "接続エラー: 部屋が見つからないか接続に失敗しました (" + err.type + ")";
+                console.error(err);
+                lobbyMainUI.classList.remove('hidden');
+            });
+        }
+
+        function setupDataConnection() {
+            dataConnection.on('open', () => {
+                console.log("DataConnection Open!");
+                lobbyScreen.classList.add('hidden');
+                battleScreen.classList.remove('hidden');
+                startGame();
+            });
+            
+            dataConnection.on('close', () => {
+                showResult("通信切断", false);
+            });
+
+            dataConnection.on('data', (data) => {
+                if (typeof data === 'string') {
+                    try { data = JSON.parse(data); } catch(e){}
+                }
+                
+                if (data.type === 'state') {
+                    enemyBoard = data.board;
+                    enemyActive = data.active;
+                    enemyState = data.state;
+                    if (data.ojama !== undefined) {
+                        document.getElementById('enemyOjamaDisplay').innerText = data.ojama;
+                    }
+                } else if (data.type === 'ojama') {
+                    myOjamaQueue += data.amount;
+                    document.getElementById('myOjamaDisplay').innerText = myOjamaQueue;
+                } else if (data.type === 'gameover') {
+                    gameState = 'GAMEOVER';
+                    showResult("YOU WIN!", true);
+                }
+            });
+        }
+
+        function broadcastState() {
+            if (dataConnection && dataConnection.open) {
+                dataConnection.send(JSON.stringify({
+                    type: 'state',
+                    board: board,
+                    active: activePuyo,
+                    state: gameState,
+                    ojama: myOjamaQueue
+                }));
+            }
+        }
+        function sendOjama(amount) {
+            if (dataConnection && dataConnection.open) {
+                dataConnection.send(JSON.stringify({ type: 'ojama', amount: amount }));
+            }
+        }
+        function sendGameOver() {
+            if (dataConnection && dataConnection.open) {
+                dataConnection.send(JSON.stringify({ type: 'gameover' }));
+            }
+        }
+
+        const COLS = 6;
+        const ROWS = 13; // y=0 は生成用
+        const BLOCK_SIZE = 30; // プレイヤー用
+        const ENEMY_BLOCK_SIZE = 20; // 相手用
+
+        const myCanvas = document.getElementById('gameCanvas');
+        const myCtx = myCanvas.getContext('2d');
+        const enCanvas = document.getElementById('enemyCanvas');
+        const enCtx = enCanvas.getContext('2d');
+        const nextCanvas = document.getElementById('nextCanvas');
+        const nextCtx = nextCanvas.getContext('2d');
+
+        const PUYO_COLORS = {
+            1: { inner: '#ff9999', outer: '#e60000' }, // 赤
+            2: { inner: '#9999ff', outer: '#0000e6' }, // 青
+            3: { inner: '#99ff99', outer: '#00cc00' }, // 緑
+            4: { inner: '#ffff99', outer: '#cccc00' }, // 黄
+            5: { inner: '#e5e7eb', outer: '#9ca3af' }  // おじゃま (灰)
+        };
+
+        // My State
+        let board = [];
+        let score = 0;
+        let chainCount = 0;
+        let nextPuyo = { c1: 0, c2: 0 };
+        let activePuyo = { x: 0, y: 0, rot: 0, c1: 0, c2: 0 };
+        let gameState = 'GAMEOVER'; // PLAYING, CLEARING, DROPPING, GAMEOVER
+        let toClear = [];
+        let myOjamaQueue = 0;
+        
+        // Enemy State
+        let enemyBoard = Array.from({length:ROWS}, ()=>Array(COLS).fill(0));
+        let enemyActive = null;
+        let enemyState = 'PLAYING';
+        let enemyOjamaQueue = 0; // 表示用
+
+        // Timers
+        let lastTime = 0;
+        let dropTimer = 0;
+        let clearTimer = 0;
+        let dropStepTimer = 0;
+        let syncTimer = 0;
+        let isFastDrop = false;
+
+        function getRandomColor() { return Math.floor(Math.random() * 4) + 1; }
+        
+        function getSubPuyoPos(x, y, rot) {
+            switch(rot) {
+                case 0: return { x: x, y: y - 1 };
+                case 1: return { x: x + 1, y: y };
+                case 2: return { x: x, y: y + 1 };
+                case 3: return { x: x - 1, y: y };
+            }
+        }
+
+        function canMove(x, y, rot) {
+            if (x < 0 || x >= COLS || y >= ROWS) return false;
+            if (y >= 0 && board[y][x] !== 0) return false;
+            let sub = getSubPuyoPos(x, y, rot);
+            if (sub.x < 0 || sub.x >= COLS || sub.y >= ROWS) return false;
+            if (sub.y >= 0 && board[sub.y][sub.x] !== 0) return false;
+            return true;
+        }
+
+        function tryRotate(dir) {
+            let newRot = (activePuyo.rot + dir + 4) % 4;
+            if (canMove(activePuyo.x, activePuyo.y, newRot)) activePuyo.rot = newRot;
+            else if (canMove(activePuyo.x - 1, activePuyo.y, newRot)) { activePuyo.x--; activePuyo.rot = newRot; }
+            else if (canMove(activePuyo.x + 1, activePuyo.y, newRot)) { activePuyo.x++; activePuyo.rot = newRot; }
+            else if (canMove(activePuyo.x, activePuyo.y - 1, newRot)) { activePuyo.y--; activePuyo.rot = newRot; }
+            broadcastState();
+        }
+
+        function lockPuyo() {
+            if (activePuyo.y >= 0) board[activePuyo.y][activePuyo.x] = activePuyo.c1;
+            let sub = getSubPuyoPos(activePuyo.x, activePuyo.y, activePuyo.rot);
+            if (sub.y >= 0) board[sub.y][sub.x] = activePuyo.c2;
+        }
+
+        function moveDown() {
+            if (canMove(activePuyo.x, activePuyo.y + 1, activePuyo.rot)) {
+                activePuyo.y++;
+            } else {
+                lockPuyo();
+                chainCount = 0;
+                gameState = 'DROPPING';
+                dropStepTimer = 0;
+            }
+        }
+
+        function applyGravityStep() {
+            let dropped = false;
+            for (let y = ROWS - 2; y >= 0; y--) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x] !== 0 && board[y + 1][x] === 0) {
+                        board[y + 1][x] = board[y][x];
+                        board[y][x] = 0;
+                        dropped = true;
+                    }
+                }
+            }
+            return dropped;
+        }
+
+        function checkMatches() {
+            let visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+            let matches = [];
+
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x] !== 0 && board[y][x] !== 5 && !visited[y][x]) { // 5はおじゃまなので起点にしない
+                        let color = board[y][x];
+                        let group = [];
+                        let stack = [{ x, y }];
+                        visited[y][x] = true;
+
+                        while (stack.length > 0) {
+                            let p = stack.pop();
+                            group.push(p);
+                            const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                            for (let d of dirs) {
+                                let nx = p.x + d[0], ny = p.y + d[1];
+                                if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+                                    if (!visited[ny][nx] && board[ny][nx] === color) {
+                                        visited[ny][nx] = true;
+                                        stack.push({ x: nx, y: ny });
+                                    }
+                                }
+                            }
+                        }
+                        if (group.length >= 4) matches = matches.concat(group);
+                    }
+                }
+            }
+
+            // おじゃまぷよの巻き込み判定
+            if (matches.length > 0) {
+                let toEraseGrid = Array.from({length:ROWS}, ()=>Array(COLS).fill(false));
+                matches.forEach(p => toEraseGrid[p.y][p.x] = true);
+                
+                let ojamaMatches = [];
+                matches.forEach(p => {
+                    const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                    for (let d of dirs) {
+                        let nx = p.x + d[0], ny = p.y + d[1];
+                        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+                            if (board[ny][nx] === 5 && !toEraseGrid[ny][nx]) {
+                                toEraseGrid[ny][nx] = true;
+                                ojamaMatches.push({x: nx, y: ny});
+                            }
+                        }
+                    }
+                });
+                matches = matches.concat(ojamaMatches);
+            }
+            return matches;
+        }
+
+        function calculateOjama(erasedCount, chain) {
+            // 連鎖数（コンボ）の2乗の数だけおじゃまぷよを発生させる
+            return chain * chain;
+        }
+
+        function spawnPuyo() {
+            // おじゃまぷよの落下処理
+            if (myOjamaQueue > 0) {
+                let dropAmount = Math.min(myOjamaQueue, 30); // 1回の最大降下数(5段)
+                myOjamaQueue -= dropAmount;
+                document.getElementById('myOjamaDisplay').innerText = myOjamaQueue;
+                
+                // 上の方の空いているマスに配置
+                let remaining = dropAmount;
+                for(let row = 0; row < 5; row++) {
+                    if (remaining <= 0) break;
+                    let cols = [0,1,2,3,4,5].sort(()=>Math.random()-0.5); // ランダムな列順
+                    for(let c of cols) {
+                        if(board[row][c] === 0) {
+                            board[row][c] = 5;
+                            remaining--;
+                            if(remaining<=0) break;
+                        }
+                    }
+                }
+                gameState = 'DROPPING';
+                dropStepTimer = 0;
+                return; // 落下が終わってから次をツモる
+            }
+
+            activePuyo = { x: 2, y: 1, rot: 0, c1: nextPuyo.c1, c2: nextPuyo.c2 };
+            nextPuyo = { c1: getRandomColor(), c2: getRandomColor() };
+            drawNext();
+            
+            if (!canMove(activePuyo.x, activePuyo.y, activePuyo.rot)) {
+                gameState = 'GAMEOVER';
+                sendGameOver();
+                showResult("YOU LOSE...", false);
+            } else {
+                gameState = 'PLAYING';
+            }
+            broadcastState();
+        }
+
+        function drawPuyo(ctx, x, y, colorCode, size) {
+            if (!PUYO_COLORS[colorCode]) return;
+            let radius = size / 2;
+            let cx = x + radius, cy = y + radius;
+            let cObj = PUYO_COLORS[colorCode];
+
+            let grad = ctx.createRadialGradient(cx - radius*0.3, cy - radius*0.3, radius*0.1, cx, cy, radius);
+            grad.addColorStop(0, cObj.inner); grad.addColorStop(1, cObj.outer);
+
+            ctx.beginPath(); ctx.arc(cx, cy, radius * 0.9, 0, Math.PI * 2);
+            ctx.fillStyle = grad; ctx.fill(); ctx.closePath();
+            
+            ctx.beginPath(); ctx.arc(cx - radius*0.3, cy - radius*0.3, radius*0.15, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.fill(); ctx.closePath();
+
+            if (colorCode !== 5) { // おじゃまぷよには目玉なし
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(cx - radius*0.2, cy, radius*0.2, 0, Math.PI*2); ctx.arc(cx + radius*0.2, cy, radius*0.2, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath(); ctx.arc(cx - radius*0.2, cy, radius*0.1, 0, Math.PI*2); ctx.arc(cx + radius*0.2, cy, radius*0.1, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        function drawBoard(ctx, b, active, state, clearingList, blockSize) {
+            ctx.clearRect(0, 0, COLS * blockSize, ROWS * blockSize);
+            
+            // Grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<=COLS; i++) { ctx.beginPath(); ctx.moveTo(i*blockSize, 0); ctx.lineTo(i*blockSize, ROWS*blockSize); ctx.stroke(); }
+            for(let i=0; i<=ROWS; i++) { ctx.beginPath(); ctx.moveTo(0, i*blockSize); ctx.lineTo(COLS*blockSize, i*blockSize); ctx.stroke(); }
+
+            // Danger Mark
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)'; ctx.lineWidth = 2;
+            let markX = 2 * blockSize, markY = 1 * blockSize;
+            ctx.strokeRect(markX+4, markY+4, blockSize-8, blockSize-8);
+
+            // Puyo
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (b[y][x] !== 0) drawPuyo(ctx, x*blockSize, y*blockSize, b[y][x], blockSize);
+                }
+            }
+
+            // Clearing Animation
+            if (state === 'CLEARING' && clearingList) {
+                let isFlash = Math.floor(clearTimer / 100) % 2 === 0;
+                if (isFlash) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    clearingList.forEach(p => ctx.fillRect(p.x*blockSize, p.y*blockSize, blockSize, blockSize));
+                }
+            }
+
+            // Active Puyo
+            if (state === 'PLAYING' && active) {
+                if(active.y >= 0) drawPuyo(ctx, active.x*blockSize, active.y*blockSize, active.c1, blockSize);
+                let sub = getSubPuyoPos(active.x, active.y, active.rot);
+                if(sub.y >= 0) drawPuyo(ctx, sub.x*blockSize, sub.y*blockSize, active.c2, blockSize);
+            }
+        }
+
+        function drawNext() {
+            nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+            let bs = 24, x = (nextCanvas.width - bs) / 2;
+            drawPuyo(nextCtx, x, 5, nextPuyo.c2, bs);
+            drawPuyo(nextCtx, x, 5 + bs, nextPuyo.c1, bs);
+        }
+
+        function update(deltaTime) {
+            if (gameState === 'GAMEOVER') return;
+
+            // Sync with opponent periodically
+            syncTimer += deltaTime;
+            if (syncTimer > 200) {
+                broadcastState();
+                syncTimer = 0;
+            }
+
+            if (gameState === 'PLAYING') {
+                dropTimer += deltaTime;
+                let speed = isFastDrop ? 50 : 800;
+                if (dropTimer >= speed) {
+                    moveDown();
+                    dropTimer = 0;
+                }
+            } 
+            else if (gameState === 'CLEARING') {
+                clearTimer += deltaTime;
+                if (clearTimer >= 700) {
+                    toClear.forEach(p => board[p.y][p.x] = 0);
+                    
+                    // おじゃまぷよ生成と相殺
+                    let generatedOjama = calculateOjama(toClear.length, chainCount);
+                    score += toClear.length * 10 * chainCount; // 簡易スコア表示用
+                    document.getElementById('scoreDisplay').innerText = score;
+
+                    if (generatedOjama > 0) {
+                        if (myOjamaQueue > 0) {
+                            if (generatedOjama >= myOjamaQueue) {
+                                generatedOjama -= myOjamaQueue;
+                                myOjamaQueue = 0;
+                            } else {
+                                myOjamaQueue -= generatedOjama;
+                                generatedOjama = 0;
+                            }
+                            document.getElementById('myOjamaDisplay').innerText = myOjamaQueue;
+                        }
+                        if (generatedOjama > 0) sendOjama(generatedOjama);
+                    }
+                    
+                    gameState = 'DROPPING';
+                    dropStepTimer = 0;
+                }
+            } 
+            else if (gameState === 'DROPPING') {
+                dropStepTimer += deltaTime;
+                if (dropStepTimer >= 80) {
+                    let dropped = applyGravityStep();
+                    if (!dropped) {
+                        toClear = checkMatches();
+                        if (toClear.length > 0) {
+                            chainCount++;
+                            showChainText(chainCount);
+                            gameState = 'CLEARING';
+                            clearTimer = 0;
+                        } else {
+                            spawnPuyo();
+                        }
+                    }
+                    dropStepTimer = 0;
+                }
+            }
+        }
+
+        function showChainText(chain) {
+            if(chain <= 1) return;
+            const cd = document.getElementById('chainDisplay');
+            cd.innerText = `${chain} CHAIN!`;
+            cd.style.opacity = '1';
+            cd.style.transform = 'translateY(0)';
+            setTimeout(() => {
+                cd.style.opacity = '0';
+                cd.style.transform = 'translateY(-20px)';
+            }, 1000);
+        }
+
+        function showResult(text, isWin) {
+            resultTitle.innerText = text;
+            resultTitle.className = 'result-title ' + (isWin ? 'win-text' : 'lose-text');
+            resultScreen.classList.remove('hidden');
+        }
+
+        returnLobbyBtn.addEventListener('click', () => {
+            window.location.reload(); // 最も確実なリセット
+        });
+
+        function gameLoop(timestamp) {
+            let deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            update(deltaTime);
+            
+            // Draw Player
+            drawBoard(myCtx, board, activePuyo, gameState, toClear, BLOCK_SIZE);
+            // Draw Enemy
+            drawBoard(enCtx, enemyBoard, enemyActive, enemyState, null, ENEMY_BLOCK_SIZE);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function setupButton(id, action, isDownBtn = false) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            
+            if (isDownBtn) {
+                const downStart = (e) => { if(e.cancelable) e.preventDefault(); if (gameState === 'PLAYING') isFastDrop = true; };
+                const downEnd = (e) => { if(e.cancelable) e.preventDefault(); isFastDrop = false; };
+                btn.addEventListener('mousedown', downStart); btn.addEventListener('touchstart', downStart, {passive: false});
+                btn.addEventListener('mouseup', downEnd); btn.addEventListener('mouseleave', downEnd); btn.addEventListener('touchend', downEnd);
+            } else {
+                const handler = (e) => {
+                    if(e.cancelable) e.preventDefault();
+                    if (gameState === 'PLAYING') { action(); broadcastState(); }
+                };
+                btn.addEventListener('mousedown', handler);
+                btn.addEventListener('touchstart', handler, { passive: false });
+            }
+        }
+
+        setupButton('btnLeft', () => { if (canMove(activePuyo.x - 1, activePuyo.y, activePuyo.rot)) activePuyo.x--; });
+        setupButton('btnRight', () => { if (canMove(activePuyo.x + 1, activePuyo.y, activePuyo.rot)) activePuyo.x++; });
+        setupButton('btnLeftRot', () => tryRotate(-1));
+        setupButton('btnRightRot', () => tryRotate(1));
+        setupButton('btnDown', null, true);
+
+        document.addEventListener('keydown', (e) => {
+            if (gameState !== 'PLAYING') return;
+            switch (e.code) {
+                case 'ArrowLeft': if (canMove(activePuyo.x - 1, activePuyo.y, activePuyo.rot)) activePuyo.x--; break;
+                case 'ArrowRight': if (canMove(activePuyo.x + 1, activePuyo.y, activePuyo.rot)) activePuyo.x++; break;
+                case 'ArrowDown': isFastDrop = true; break;
+                case 'ArrowUp': case 'KeyX': tryRotate(1); break;
+                case 'KeyZ': tryRotate(-1); break;
+            }
+            broadcastState();
+        });
+        document.addEventListener('keyup', (e) => { if (e.code === 'ArrowDown') isFastDrop = false; });
+
+        function startGame() {
+            board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            enemyBoard = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            score = 0; chainCount = 0; myOjamaQueue = 0;
+            document.getElementById('scoreDisplay').innerText = '0';
+            document.getElementById('myOjamaDisplay').innerText = '0';
+            
+            nextPuyo = { c1: getRandomColor(), c2: getRandomColor() };
+            spawnPuyo();
+            
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+    </script>
+</body>
+</html>
